@@ -1,0 +1,50 @@
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Generated audio and downloads
+downloads/
+uploads/
+temp/
+tmp/
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.mov
+*.webm
+
+# Vector database
+vector_db/
+chroma_db/
+
+# Model cache
+.cache/
+huggingface_cache/
+models/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Logs
+*.log

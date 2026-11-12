@@ -1,0 +1,27 @@
+
+# Google Gemini API
+google-genai
+python-dotenv
+
+# Audio and Video Processing
+faster-whisper
+yt-dlp
+
+# LangChain and RAG
+langchain
+langchain-core
+langchain-text-splitters
+langchain-chroma
+langchain-huggingface
+
+# Embeddings
+sentence-transformers
+
+# Vector Database
+chromadb
+
+# Frontend
+streamlit
+
+# Utilities
+requests

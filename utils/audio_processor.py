@@ -1,22 +1,37 @@
-import yt_dlp
 import os
 import subprocess
+from pathlib import Path
 
-# Create downloads folder if it doesn't exist
-DOWNLOAD_DIR = "downloads"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+import yt_dlp
+
+# ==========================================
+# CONFIGURATION
+# ==========================================
+
+DOWNLOAD_DIR = Path("downloads")
+DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+CHUNK_MINUTES = 10
+
+
+# ==========================================
+# YOUTUBE AUDIO DOWNLOAD
+# ==========================================
 
 
 def download_youtube_audio(url: str) -> str:
-    """Download YouTube audio and convert it to WAV."""
+    """
+    Download publicly accessible YouTube audio
+    and convert it to WAV.
+    """
 
-    output_path = os.path.join(DOWNLOAD_DIR, "%(id)s.%(ext)s")
+    output_path = str(DOWNLOAD_DIR / "%(id)s.%(ext)s")
 
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": output_path,
         "noplaylist": True,
-        # Convert downloaded audio to WAV
+        # Convert audio to WAV
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -27,53 +42,86 @@ def download_youtube_audio(url: str) -> str:
         "retries": 5,
         "fragment_retries": 5,
         "socket_timeout": 30,
-        # YouTube compatibility
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "web"],
-            }
-        },
         # JavaScript challenge support
         "js_runtimes": {"node": {}},
         "remote_components": ["ejs:github"],
+        # Try the web player client
+        "extractor_args": {"youtube": {"player_client": ["web"]}},
         "quiet": False,
         "no_warnings": False,
     }
 
     try:
+        print("Connecting to YouTube...")
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 
             info = ydl.extract_info(url, download=True)
 
+            if not info:
+                raise RuntimeError("Could not retrieve YouTube video information.")
+
             filename = ydl.prepare_filename(info)
 
-            # Change extension to WAV
-            filename = os.path.splitext(filename)[0] + ".wav"
+            # Replace original extension with WAV
+            wav_path = str(Path(filename).with_suffix(".wav"))
 
-            if not os.path.exists(filename):
-                raise FileNotFoundError(f"Audio file was not created: {filename}")
+            if not os.path.isfile(wav_path):
+                raise FileNotFoundError(f"Audio file was not created: {wav_path}")
 
-            return filename
+            if os.path.getsize(wav_path) == 0:
+                raise RuntimeError("Downloaded audio file is empty.")
+
+            print("YouTube audio downloaded successfully.")
+
+            return wav_path
 
     except Exception as e:
-        raise RuntimeError(f"YouTube download failed: {str(e)}") from e
+
+        error_message = str(e)
+
+        if "Sign in to confirm" in error_message:
+            raise RuntimeError(
+                "YouTube requires sign-in verification. "
+                "This hosting server may be restricted by YouTube. "
+                "Please upload the audio/video file directly instead."
+            ) from e
+
+        if "HTTP Error 403" in error_message:
+            raise RuntimeError(
+                "YouTube rejected the download request (HTTP 403). "
+                "This may be due to hosting IP restrictions or player access restrictions. "
+                "Please try uploading the audio/video file directly."
+            ) from e
+
+        raise RuntimeError(f"YouTube download failed: {error_message}") from e
+
+
+# ==========================================
+# LOCAL AUDIO / VIDEO CONVERSION
+# ==========================================
 
 
 def convert_to_wav(input_path: str) -> str:
-    """Convert local audio/video files to WAV using FFmpeg."""
+    """
+    Convert local audio/video files to WAV using FFmpeg.
+    """
 
-    if not os.path.isfile(input_path):
+    input_path = Path(input_path)
+
+    if not input_path.is_file():
         raise FileNotFoundError(f"File not found: {input_path}")
 
-    output_path = os.path.splitext(input_path)[0] + "_converted.wav"
+    output_path = input_path.with_name(input_path.stem + "_converted.wav")
 
     try:
+
         subprocess.run(
             [
                 "ffmpeg",
                 "-y",
                 "-i",
-                input_path,
+                str(input_path),
                 "-vn",
                 "-ac",
                 "1",
@@ -81,7 +129,7 @@ def convert_to_wav(input_path: str) -> str:
                 "16000",
                 "-c:a",
                 "pcm_s16le",
-                output_path,
+                str(output_path),
             ],
             check=True,
             capture_output=True,
@@ -89,15 +137,30 @@ def convert_to_wav(input_path: str) -> str:
         )
 
     except subprocess.CalledProcessError as e:
+
         raise RuntimeError(f"FFmpeg conversion failed: {e.stderr}") from e
 
-    return output_path
+    if not output_path.exists() or output_path.stat().st_size == 0:
+        raise RuntimeError("FFmpeg did not create a valid WAV file.")
+
+    print(f"Audio converted successfully: {output_path}")
+
+    return str(output_path)
 
 
-def chunk_audio(wav_path: str, chunk_minutes: int = 10) -> list:
-    """Split WAV audio into smaller chunks using FFmpeg."""
+# ==========================================
+# AUDIO CHUNKING
+# ==========================================
 
-    if not os.path.isfile(wav_path):
+
+def chunk_audio(wav_path: str, chunk_minutes: int = CHUNK_MINUTES) -> list:
+    """
+    Split WAV audio into smaller chunks using FFmpeg.
+    """
+
+    wav_path = Path(wav_path)
+
+    if not wav_path.is_file():
         raise FileNotFoundError(f"Audio file not found: {wav_path}")
 
     if chunk_minutes <= 0:
@@ -105,15 +168,20 @@ def chunk_audio(wav_path: str, chunk_minutes: int = 10) -> list:
 
     chunk_seconds = chunk_minutes * 60
 
-    output_pattern = os.path.splitext(wav_path)[0] + "_chunk_%03d.wav"
+    output_pattern = str(wav_path.with_name(wav_path.stem + "_chunk_%03d.wav"))
+
+    # Remove previous chunks to avoid processing stale files
+    for old_chunk in wav_path.parent.glob(wav_path.stem + "_chunk_*.wav"):
+        old_chunk.unlink()
 
     try:
+
         subprocess.run(
             [
                 "ffmpeg",
                 "-y",
                 "-i",
-                wav_path,
+                str(wav_path),
                 "-f",
                 "segment",
                 "-segment_time",
@@ -128,30 +196,32 @@ def chunk_audio(wav_path: str, chunk_minutes: int = 10) -> list:
         )
 
     except subprocess.CalledProcessError as e:
+
         raise RuntimeError(f"Audio chunking failed: {e.stderr}") from e
 
-    chunks = []
-    i = 0
+    chunks = sorted(wav_path.parent.glob(wav_path.stem + "_chunk_*.wav"))
 
-    while True:
-        chunk_path = output_pattern.replace("%03d", f"{i:03d}")
-
-        if not os.path.exists(chunk_path):
-            break
-
-        chunks.append(chunk_path)
-        i += 1
+    chunks = [str(chunk) for chunk in chunks if chunk.stat().st_size > 0]
 
     if not chunks:
         raise RuntimeError("No audio chunks were created.")
 
+    print(f"Created {len(chunks)} audio chunks.")
+
     return chunks
+
+
+# ==========================================
+# MAIN INPUT PROCESSOR
+# ==========================================
 
 
 def process_input(source: str) -> list:
     """
     Process YouTube URLs or local audio/video files.
-    Returns a list of WAV audio chunk paths.
+
+    Returns:
+        List of WAV audio chunk paths.
     """
 
     if not source or not source.strip():
@@ -161,20 +231,20 @@ def process_input(source: str) -> list:
 
     if source.startswith(("http://", "https://")):
 
-        print("Detected YouTube URL. Downloading audio...")
+        print("Detected YouTube URL.")
 
         wav_path = download_youtube_audio(source)
 
     else:
 
-        print("Detected local file. Converting to WAV...")
+        print("Detected local audio/video file.")
 
         wav_path = convert_to_wav(source)
 
-    print("Chunking audio...")
+    print("Starting audio chunking...")
 
     chunks = chunk_audio(wav_path)
 
-    print(f"Audio ready - {len(chunks)} chunk(s) created.")
+    print(f"Audio processing completed. " f"{len(chunks)} chunk(s) created.")
 
     return chunks

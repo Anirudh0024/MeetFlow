@@ -94,7 +94,7 @@ fsspec==2026.9.0
     #   torch
 google-auth==2.62.2
     # via google-genai
-google-genai==3.1.0
+google-genai==3.2.0
     # via
     #   langchain-google-genai
     #   meetflow
@@ -185,7 +185,7 @@ langchain-core==1.8.0
     #   langgraph-prebuilt
     #   langgraph-sdk
     #   meetflow
-langchain-google-genai==4.4.3
+langchain-google-genai==4.5.0
     # via meetflow
 langchain-groq==1.1.3
     # via meetflow
@@ -574,6 +574,8 @@ xxhash==4.1.0
 yarl==1.25.1
     # via aiohttp
 yt-dlp==2026.10.26
+    # via meetflow
+yt-dlp-ejs==0.8.0
     # via meetflow
 zstandard==0.25.0
     # via langsmith

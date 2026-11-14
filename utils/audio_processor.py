@@ -31,7 +31,7 @@ def download_youtube_audio(url: str) -> str:
         "format": "bestaudio/best",
         "outtmpl": output_path,
         "noplaylist": True,
-        # Convert audio to WAV
+        # Convert downloaded audio to WAV
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -45,8 +45,9 @@ def download_youtube_audio(url: str) -> str:
         # JavaScript challenge support
         "js_runtimes": {"node": {}},
         "remote_components": ["ejs:github"],
-        # Try the web player client
-        "extractor_args": {"youtube": {"player_client": ["web"]}},
+        # IMPORTANT:
+        # Do not force a specific YouTube player client.
+        # Let yt-dlp select available clients automatically.
         "quiet": False,
         "no_warnings": False,
     }
@@ -63,7 +64,7 @@ def download_youtube_audio(url: str) -> str:
 
             filename = ydl.prepare_filename(info)
 
-            # Replace original extension with WAV
+            # Get the WAV output path
             wav_path = str(Path(filename).with_suffix(".wav"))
 
             if not os.path.isfile(wav_path):
@@ -83,14 +84,15 @@ def download_youtube_audio(url: str) -> str:
         if "Sign in to confirm" in error_message:
             raise RuntimeError(
                 "YouTube requires sign-in verification. "
-                "This hosting server may be restricted by YouTube. "
-                "Please upload the audio/video file directly instead."
+                "The server may be restricted by YouTube. "
+                "Please upload the audio/video file directly."
             ) from e
 
         if "HTTP Error 403" in error_message:
             raise RuntimeError(
                 "YouTube rejected the download request (HTTP 403). "
-                "This may be due to hosting IP restrictions or player access restrictions. "
+                "This may be caused by hosting IP restrictions "
+                "or player access restrictions. "
                 "Please try uploading the audio/video file directly."
             ) from e
 
@@ -115,7 +117,6 @@ def convert_to_wav(input_path: str) -> str:
     output_path = input_path.with_name(input_path.stem + "_converted.wav")
 
     try:
-
         subprocess.run(
             [
                 "ffmpeg",
@@ -137,7 +138,6 @@ def convert_to_wav(input_path: str) -> str:
         )
 
     except subprocess.CalledProcessError as e:
-
         raise RuntimeError(f"FFmpeg conversion failed: {e.stderr}") from e
 
     if not output_path.exists() or output_path.stat().st_size == 0:
@@ -170,12 +170,11 @@ def chunk_audio(wav_path: str, chunk_minutes: int = CHUNK_MINUTES) -> list:
 
     output_pattern = str(wav_path.with_name(wav_path.stem + "_chunk_%03d.wav"))
 
-    # Remove previous chunks to avoid processing stale files
+    # Remove previous chunks to avoid stale files
     for old_chunk in wav_path.parent.glob(wav_path.stem + "_chunk_*.wav"):
         old_chunk.unlink()
 
     try:
-
         subprocess.run(
             [
                 "ffmpeg",
@@ -196,7 +195,6 @@ def chunk_audio(wav_path: str, chunk_minutes: int = CHUNK_MINUTES) -> list:
         )
 
     except subprocess.CalledProcessError as e:
-
         raise RuntimeError(f"Audio chunking failed: {e.stderr}") from e
 
     chunks = sorted(wav_path.parent.glob(wav_path.stem + "_chunk_*.wav"))

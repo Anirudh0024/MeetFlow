@@ -579,12 +579,50 @@ def process_meeting(source: str, language: str, label: str) -> bool:
 
 
 def ask_meeting(meeting: dict, question: str) -> str:
+    """
+    Answer predefined questions using extracted meeting data.
+    Use RAG for other custom questions.
+    """
+
+    normalized_question = re.sub(r"[\W_]+", " ", question.lower()).strip()
+
+    # Direct answers from the meeting analysis
+    direct_answers = {
+        "what are the main takeaways": ("summary", "No meeting summary was generated."),
+        "what decisions were made": (
+            "key_decisions",
+            "No decisions were found in this meeting.",
+        ),
+        "list the action items": (
+            "action_items",
+            "No action items were found in this meeting.",
+        ),
+        "what questions remain open": (
+            "open_questions",
+            "No open questions were found in this meeting.",
+        ),
+    }
+
+    # Use extracted results for predefined questions
+    if normalized_question in direct_answers:
+
+        field, fallback = direct_answers[normalized_question]
+
+        return as_markdown(meeting.get(field), fallback)
+
+    # Use RAG for general questions
     rag_chain = meeting.get("rag_chain")
+
     if rag_chain is None:
-        return "Chat isn't available for this meeting because its search index couldn't be built."
+        return (
+            "Chat isn't available for this meeting because "
+            "its search index couldn't be built."
+        )
+
     try:
         return str(answer_question(rag_chain, question))
-    except Exception as exc:  # noqa: BLE001
+
+    except Exception as exc:
         return f"Sorry, I couldn't answer that question: {exc}"
 
 

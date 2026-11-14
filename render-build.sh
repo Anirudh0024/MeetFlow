@@ -1,5 +1,17 @@
-
 #!/usr/bin/env bash
+
 set -o errexit
 
-pip install -r requirements.txt
+echo "Checking Python version..."
+python --version
+
+echo "Checking FFmpeg..."
+ffmpeg -version
+
+echo "Checking Node.js..."
+node --version
+
+echo "Installing MeetFlow dependencies..."
+uv sync --locked --no-install-project
+
+echo "Build completed successfully!"
